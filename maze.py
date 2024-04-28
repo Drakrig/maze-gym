@@ -362,7 +362,7 @@ class MazeV5(gym.Env):
                     np.array(pygame.surfarray.pixels3d(self.surface)), axes=(1, 0, 2)
                 )
 
-    def _plot_maze(self, figsize: Tuple[int.int] = (5,5), save: bool|None = False) -> None:
+    def _plot_maze(self, figsize: Tuple[int, int] = (5,5), save: bool|None = False) -> None:
         plt.figure(figsize=figsize)
 
         for state in self.states.values():
