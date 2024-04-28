@@ -6,66 +6,108 @@ import pygame
 from typing import TYPE_CHECKING, Optional, Dict, Tuple, List, Type, Any
 
 class StateV3():
+    """Maze states representation class. Store information about state coords, type, reward and neighbours.
+
+    :param coords: coordinates of the state in the maze
+    :type coords: np.ndarray
+    :param valid_actions: List of avaliable and valid actions in numerical form. Used only during maze creation
+    :type valid_actions: List[int]
+    :param state_type: Type of the state as string, defaults to "normal"
+    :type state_type: str, optional
+    :ivar neighbours: Dictionary, where keys are directions in numerical form 
+        and values are references to :class:`Statev3` object
+    :vartype neighbours: dict
     """
-    Maze states representation class. Store information about state coords, type, reward and neighobiurs
-    """
-    def __init__(self, coords: np.ndarray, neighbours:Dict , valid_actions:List[int], state_type: str="normal"):
+    def __init__(self, coords: np.ndarray, valid_actions:List[int], state_type: str="normal"):
+        """Constructor method
+        """
         self._coords = coords
         self.type = state_type
         self.reward = 0
-        self.neighbours = neighbours
         self.valid_actions = valid_actions
+        self.neighbours = dict(zip(valid_actions, [None]*len(valid_actions)))
+
 
     @property
     def coords(self) -> np.ndarray:
-        """Return state coords as NumPy array"""
+        """Return state coords as NumPy array.
+
+        :return: :class:np.ndarray with state coordinates
+        :rtype: np.ndarray"""
         return self._coords
     
     @property
     def observation(self) -> np.ndarray:
-        """Return state existing neighbours as bool array in format [N, E, S, W]"""
+        """Return state existing neighbours as bool array in format [N, E, S, W]
+
+        :return: :class:`np.ndarray` with bool value that represent in neighbour state in
+            corresponded direction exists
+        :rtype: np.ndarray
+        """
         neighbours = [True if neighbour is not None else False for neighbour in self.neighbours.values()]
         return np.array(neighbours, dtype=np.bool_)
 
     @property
     def xy(self) -> Tuple[int,int]:
-        """Return state coords as tuple"""
+        """Return state coords as tuple
+
+        :return: :class:`tuple()` of :class:`int` with state coordinates
+        :rtype: _type_
+        """
         return tuple(self.coords)
 
     def get_valid_neighbours(self) -> np.ndarray:
-        """Return state neighbours"""
+        """Return state neighbours
+
+        :return: :class:`np.ndarray` with references to :class:`Statev3` objects
+        :rtype: np.ndarray
+        """
         neighbours = np.array((list(self.neighbours.values())))
         return neighbours[neighbours != None]
     
     def add_neighbour(self, action:int, neighbour:'StateV3') -> None:
-        """Add neighbour to state"""
+        """Add neighbour to state
+
+        :param action: Direction, encoded as integer
+        :type action: int
+        :param neighbour: Reference to :class:`Statev3` object
+        :type neighbour: StateV3
+        """
         self.neighbours[action] = neighbour
         self.valid_actions.remove(action)
 
 class MazeBuilderV4():
     """Class for building maze
-    Args:
-* actions: set of possible actions (action space). It should determine possible movements for agent in maze. Usually its movements to norths, east, south and west, but it may be possible to add another directions (south-east, north-west etc.) 
-* shape: default (10,10) determine the shape of maze. Currently may have only 2 demensions. May be assimetrical as well, for example (20,10) 
-* connections_limit: default 3. Determine how much per state connections are allowed
-* fullfill: default 0.5. Determine what percent of maximum possible total connections will be used during creation with respect to max connection per state. For example, for maze of size (10,10) with connection_limit = 4 max amount of connection is 180. If fullfill = 0.5 then we will have 180 * 0.5 = 90 connections in maze. 
-* seed: random seed for creation, so we can control the process
+
+    :param actions: set of possible actions (action space). It should determine possible movements for agent in maze.
+    Usually its movements to north, east, south and west, but it may be possible to add another directions (south-east, north-west etc.).
+    Has to be a dictionary where keys are encoded direction and values are actual movements, which encodes how state coords will change 
+    :type actions: Dict[int, np.ndarray]
+    :param shape: determine the shape of maze. Currently may have only 2 demensions. May be assimetrical as well, for example (20,10), defaults to (10,10)
+    :type shape: Tuple[int,int], optional
+    :param connections_limit: Determine how much per state connections are allowed, defaults to 3
+    :type connections_limit: int, optional
+    :param fullfill: Determine what percent of maximum possible total connections will be used during creation with respect to max connection per state. 
+    For example, for maze of size (10,10) with connection_limit = 4 max amount of connection is 180. If fullfill = 0.5 then we will have 180 * 0.5 = 90 connections in maze.
+    Defaults to 0.5
+    :type fullfill: float, optional
+    :param seed: random seed for creation, so we can control the process, defaults to None
+    :type seed: int, optional
     """
     def __init__(self, 
-                 actions:Dict, 
+                 actions:Dict[int, np.ndarray], 
                  shape: Tuple[int,int]=(10,10), 
                  connections_limit:int=3, 
                  fullfill:float=0.5, 
                  seed: int=None):
+        """Constructor method
+        """
         self.movements = actions
         self.shape = shape
-        self.size = shape[0] * shape[1]
         self.states = {}
         self.connections_limit = connections_limit
         self.fullfill = fullfill
         self.seed = seed if seed is not None else None
-        self.total_x = shape[0]
-        self.total_y = shape[1]
         self.total_pathes = self.shape[0] * (self.shape[1] - 1) + self.shape[1] * (self.shape[0] - 1)
         if self.connections_limit < len(shape) * 2:
             #Discount factor for less connections
@@ -79,7 +121,7 @@ class MazeBuilderV4():
                                             (x[1] == 1 or x[1] == self.shape[1]), arr=grid, axis=1)
         
         possible_entrance = grid[mask]
-        self.grid = grid.reshape(self.shape[0],self.shape[1],2)
+        grid = grid.reshape(self.shape[0],self.shape[1],2)
 
         self.entrance = possible_entrance[np.random.choice(possible_entrance.shape[0])]
 
@@ -91,47 +133,79 @@ class MazeBuilderV4():
         self._create_maze()
     
     def _is_full_enoght(self) -> bool:
+        """Check main loop stop condition - if enough pathes were created
+
+        :return: True if stop condition reached, False otherwise
+        :rtype: bool
+        """
         return self.filled_pathes < self.total_pathes * self.fullfill
 
     #State Section
 
     def _create_state(self, coords:np.ndarray) -> Type[StateV3]:
-        neighbours, actions = self._find_neighbours(coords)
-        return StateV3(coords, neighbours, actions)
+        """Create new state
+
+        :param coords: coordinates of the newly created states
+        :type coords: np.ndarray
+        :return: New :class:`state.StateV3` object
+        :rtype: Type[StateV3]
+        """
+        actions = self._find_valid_action(coords)
+        return StateV3(coords, actions)
     
     def _if_state_exist(self, coords:Tuple[int,int]) -> bool:
+        """Check if state already exists in maze
+
+        :param coords: Coords of the states in tuple form
+        :type coords: Tuple[int,int]
+        :return: True if state was already created, False oterwise
+        :rtype: bool
+        """
         try:
             self.states[coords]
             return True
         except:
             return False
+    
+    def _find_valid_action(self, coords:np.ndarray) -> Tuple[Dict, List[int]]:
+        """Find action, valid for coordinates
+
+        :param coords: _description_
+        :type coords: np.ndarray
+        :return: _description_
+        :rtype: Tuple[Dict, List[int]]
+        """
+        valid_actions = list()
+        for key in self.movements.keys():
+            if (np.zeros(2) < self.movements[key] + coords).all() \
+                & (self.movements[key] + coords <= np.array(self.shape)).all():
+                valid_actions.append(key)
+        return valid_actions
 
     #Action Section
     
-    def _if_valid_action(self, coords:np.ndarray, action:int) -> bool:
-        next_coords = coords + action
-        for i in range(len(self.shape)):
-            if not 0<next_coords[i]<=self.shape[i]:
-                return False
-        return True
-    
     def _opposite_direction(self, action:int) -> int:
+        """Find opposite direction as code value. For example, for north will return south
+
+        :param action: Selected action
+        :type action: int
+        :return: Action that leads to opposite direction
+        :rtype: int
+        """
         return (action + len(self.movements)/2) % len(self.movements)
     
     # Neighbours Section
-
-    def _find_neighbours(self, coords:np.ndarray) -> Tuple[Dict, List[int]]:
-        valid_directions = dict()
-        valid_actions = list()
-        for key, action in self.movements.items():
-            next_coords = coords + action
-            valid = self._if_valid_action(coords, action)
-            valid_directions[key] = None
-            if valid:
-                valid_actions.append(key)
-        return valid_directions, valid_actions
     
-    def _connect_states(self,action:int, state:StateV3, next_state:Type[StateV3]) -> None:
+    def _connect_states(self,action:int, state:Type[StateV3], next_state:Type[StateV3]) -> None:
+        """Create connection between two states by adding referencecs in each other neighbours dictionary
+
+        :param action: Encoded action value
+        :type action: int
+        :param state: One state
+        :type state: Type[StateV3]
+        :param next_state: Another state
+        :type next_state: Type[StateV3]
+        """
         state.add_neighbour(action, next_state)
         opposite = int(self._opposite_direction(action))
         next_state.add_neighbour(opposite, state)
@@ -146,6 +220,19 @@ class MazeBuilderV4():
                 self.seed+=1
     
     def _create_path(self, state:Type[StateV3]) -> None:
+        """Main creation method. Do the following:
+
+        1. Check if reached limit for per state connections or any valid action left.
+          - if any true, change current state to one of its neighbours and goes to next main loop step
+        2. Take one of the avaliable valid actions and check if any state exist in such coordinates
+          - if no state exist, create new state and create connection between new and current state
+          - if state exist, check if it has reached limir for per state number of cinnection
+            - if limit is reached, remove selected earlier action from valid ones and trying to select another action
+            - otherwise create connection between two states and change current state to selected neighbour state
+
+        :param state: Current state
+        :type state: Type[StateV3]
+        """
         if self.seed:
             np.random.seed(self.seed)
         if state.get_valid_neighbours().shape[0] == self.connections_limit\
@@ -183,16 +270,27 @@ class MazeBuilderV4():
 
 class MazeV5(gym.Env):
     """Maze enviroment for path finding task
-    Args:
-* shape (int,int): default (10,10) shape of the maze
-* connections_limit int: default 3. Determine how much per state connections are allowed
-* fullfill float: default 0.5. Determine what percent of maximum possible total connections will be used during creation with respect to max connection per state. For example, for maze of size (10,10) with connection_limit = 4 max amount of connection is 180. If fullfill = 0.5 then we will have 180 * 0.5 = 90 connections in maze. 
-* traps_percent float: default 0. Percent of the states to set as traps. Currently unused since requere more balancing both reward and observation space
-* distance_quantile float: default 0.75. Using to select goal state. Selection based on distance from maze entrance (starting point)
-* dynamic_reward bool: default True. Set type of reward. 
-* seed int: random seed for creation, so we can control the process
-* render bool: default False. Render flag. If True, also requare to select render mode
-* render_mode str: optional, possible values [human, rgb_array]. Determine how to handle rendered maze
+
+    :param shape: Shape of the maze, defaults to (10,10)
+    :type shape: Tuple[int,int] | None, optional
+    :param connections_limit: Determine how much per state connections are allowed, defaults to 3
+    :type connections_limit: int | None, optional
+    :param fullfill: Determine what percent of maximum possible total connections will be used during creation with respect to max connection per state.
+    For example, for maze of size (10,10) with connection_limit = 4 max amount of connection is 180. 
+    If fullfill = 0.5 then we will have 180 * 0.5 = 90 connections in maze. Defaults to 0.5
+    :type fullfill: float | None, optional
+    :param traps_percent: Percent of the states to set as traps. Currently unused since requere more balancing both reward and observation space, defaults to 0
+    :type traps_percent: float | None, optional
+    :param distance_quantile: Using to select goal state. Selection based on distance from maze entrance (starting point), defaults to 0.75
+    :type distance_quantile: float | None, optional
+    :param dynamic_reward: Flag for selection type of reward for step, defaults to True
+    :type dynamic_reward: bool | None, optional
+    :param seed: Random seed for maze creation, so we can control the process, defaults to None
+    :type seed: int | None, optional
+    :param render: Render flag. If True, also requare to select render mode, defaults to False
+    :type render: bool | None, optional
+    :param render_mode: Determine how to handle rendered maze, possible values [human, rgb_array], defaults to None
+    :type render_mode: str | None, optional 
     """
     def __init__(self,
                 shape: Tuple[int,int]|None = (10,10),
@@ -204,6 +302,8 @@ class MazeV5(gym.Env):
                 seed: int|None = None,
                 render: bool|None = False,
                 render_mode: str|None = None):
+        """Constructor method
+        """
         super(MazeV5, self).__init__()
         self.movements = {0:np.array([0,1]), 1:np.array([1,0]), 2:np.array([0,-1]), 3:np.array([-1,0])}
         builder = MazeBuilderV4(self.movements, shape, connections_limit, fullfill, seed)
@@ -239,51 +339,93 @@ class MazeV5(gym.Env):
                 self.screen = pygame.display.set_mode((640, 640))
             self.render()
     
-    def calc_direction(self) -> float: #v5
-            ax, ay = np.array([0, 1]), np.array([1, 0])
-            vector = self.goal - self.current_state.coords
-            if vector.sum()==0:
-                return np.zeros(2)
-            cos_x = np.dot(ax, vector) / (np.linalg.norm(ax) * np.linalg.norm(vector))
-            cos_y = np.dot(ay, vector) / (np.linalg.norm(ay) * np.linalg.norm(vector))
-            angle_degrees = np.array([np.degrees(np.arccos(cos_x)),
-                                    np.degrees(np.arccos(cos_y))])
-            return angle_degrees / 180
+    def calc_direction(self) -> np.ndarray: #v5
+        """Method for calculation of angle between X and Y axes and vector that points from current state to goal.
+        Value normalized between 0 and 180
+        Should (probably) work as compass for agent.
+
+        :return: Normalized angel between dimentional axes and directional vector
+        :rtype: np.ndarray
+        """
+        ax, ay = np.array([0, 1]), np.array([1, 0])
+        vector = self.goal - self.current_state.coords
+        if vector.sum()==0:
+            return np.zeros(2)
+        cos_x = np.dot(ax, vector) / (np.linalg.norm(ax) * np.linalg.norm(vector))
+        cos_y = np.dot(ay, vector) / (np.linalg.norm(ay) * np.linalg.norm(vector))
+        angle_degrees = np.array([np.degrees(np.arccos(cos_x)),
+                                np.degrees(np.arccos(cos_y))])
+        return angle_degrees / 180
 
     def _calc_step_reward(self) -> float:
+        """Calculate step reward by following formula
+        -0.01 * normalized_eucledean_distance_to_goal
+        So, reward will become bigger, as we approach goal state.
+        By appling normalization we make reward more universal for all kind of shapes and distances
+
+        :return: _description_
+        :rtype: float
+        """
         distance_reward = -0.01 * (self._calc_distance(self.goal, self.current_state.coords) / self.max_distance)
         return distance_reward + self.current_state.reward
     
     def _calc_distance(self, point1:np.ndarray, point2:np.ndarray) -> float:
+        """Calculate eucledean distance between 2 coordinates
+
+        :param point1: One coordinate
+        :type point1: np.ndarray
+        :param point2: Another coordinate
+        :type point2: np.ndarray
+        :return: Eucledean distance between coordinates
+        :rtype: float
+        """
         return np.sqrt(np.power(point1 - point2, 2).sum())
 
-    def _is_valid_action(self, movement:np.ndarray) -> bool:
+    def _is_valid_action(self, action:np.ndarray) -> bool:
+        """Check if selected action is valid for current state 
+
+        :param action: _description_
+        :type action: in
+        :return: _description_
+        :rtype: bool
+        """
         possible_coords=[]
         for key in self.current_state.neighbours.keys():
             if self.current_state.neighbours[key] is not None:
                 possible_coords.append(self.current_state.neighbours[key].xy)
-        new_coords = tuple(self.current_state.coords + movement)
+        new_coords = tuple(self.current_state.coords + self.movements[action])
         return new_coords in possible_coords
     
     def _place_goal(self, points:np.ndarray) -> None:
-        distances, pathes = np.array([]), np.zeros((1,2))
-        for i in range(points.shape[0]):
-            distance = self._calc_distance(self.entrance, points[i])
-            distances = np.append(distances, distance)
-            pathes = np.vstack((pathes, points[i]))
+        """Selects state to make it a goal state. For that uses eucledean distance between starting state and all another states.
+        Then filter it by specified quantile and randomly select one of them.
+
+        :param points: Array with states coordinates
+        :type points: np.ndarray
+        """
+        distances = np.apply_along_axis(self._calc_distance, 
+                                        arr=points,
+                                        point2=self.current_state.coords,
+                                        axis=1)
         limit = np.quantile(distances, self.min_distance_quant)
-        mask = distances >= limit
-        pathes = pathes[1:]
-        pathes = pathes[mask]
-        np.random.seed(self.seed)
+        distances = distances.reshape(points.shape[0],1) 
+        idxs = np.arange(0, points.shape[0]).reshape(points.shape[0], 1)
+        df = np.hstack([idxs, distances]).reshape(distances.shape[0],2,1)  
+        mask = (df[:,1,:] >= limit).reshape(points.shape[0])
+        df = df[mask]
         if self.seed:
             np.random.seed(self.seed)
-        idx = np.random.randint(0, pathes.shape[0])
-        self.goal = pathes[idx]
+        idx = df[np.random.randint(0, df.shape[0])][0][0].astype(int)
+        self.goal = points[idx]
         self.states[tuple(self.goal)].type = "treasure"
         self.states[tuple(self.goal)].reward = self._calc_distance(self.entrance, self.goal) if self.dynamic_reward else self.shape[0]*self.shape[1]
 
     def _place_special_points(self, traps_percent:float) -> None:
+        """Place traps and goal in maze
+
+        :param traps_percent: Percentage of states that will be traps
+        :type traps_percent: float
+        """
         points = list(self.states.keys())
         points.remove(self.current_state.xy)
         limit = np.round(len(points) * traps_percent)
@@ -299,20 +441,42 @@ class MazeV5(gym.Env):
             self._place_goal(np.array(points))
 
     def get_observation(self) -> np.ndarray:
+        """Function for returning current observation of environment.
+        Separated from step method, so can be modified if necessary.
+
+        :return: Observation as :class:`np.ndarray`
+        :rtype: np.ndarray
+        """
         distance = self._calc_distance(self.current_state.coords, self.goal) / self.max_distance
         angel = self.calc_direction() #v5
         observation = np.append(np.append(distance, angel), self.current_state.observation)
         return observation
     
     def reset(self, seed:int | None = None, options: dict[str, Any] | None = None) -> Tuple[np.ndarray, dict[str, Any]]:
+        """Standrat reset method
+
+        :param seed: selected random seed, defaults to None
+        :type seed: int | None, optional
+        :param options: Additional options for enviromnment. Added for compability, defaults to None
+        :type options: dict[str, Any] | None, optional
+        :return: Observation and environment info 
+        :rtype: Tuple[np.ndarray, dict[str, Any]]
+        """
         self.current_state = self.states[tuple(self.entrance)]
         if self.use_render:
             self.render()
         return self.get_observation(), {}
     
     def step(self, action:int) -> Tuple[np.ndarray, float, bool, bool, Dict]:
+        """Step method of environment
+
+        :param action: Action, selected by agent
+        :type action: int
+        :return: Environment observation, step reward, done flag, False(whatever is it), and enviroment info 
+        :rtype: Tuple[np.ndarray, float, bool, bool, Dict]
+        """
         # Take a step with the given action and return the next state, reward, done, and info
-        valid_action = self._is_valid_action(self.movements[action])
+        valid_action = self._is_valid_action(action)
         if valid_action:
             self._repeat=1
             new_state = tuple(self.current_state.coords + self.movements[action])
@@ -326,6 +490,15 @@ class MazeV5(gym.Env):
         return observation, reward, done, False, dict()
 
     def _draw_state_neighbours(self, state:StateV3, center:np.ndarray, deep:int) -> None:
+        """Recursive function for rendering neighbouring states
+
+        :param state: State
+        :type state: StateV3
+        :param center: Relative center from which lines will be drawn
+        :type center: np.ndarray
+        :param deep: Stop flag for rendering
+        :type deep: int
+        """
         if deep >= self._render_deep:
             return
         for neighbour in state.neighbours.values():
@@ -337,6 +510,12 @@ class MazeV5(gym.Env):
                 self._draw_state_neighbours(neighbour, coords, deep+1)
     
     def render(self) -> np.ndarray|None:
+        """Renders enviroment graphical representation with PyGame with 640x640 resolution.
+        Since maze may have different size, renders only nearies states.
+
+        :return: NumPy array with rendered pixels or None if for-human rendering is selected
+        :rtype: np.ndarray|None
+        """
         #Main screen
         self.surface.fill("grey")
         self._draw_state_neighbours(self.current_state, np.array([320,320]),0)
@@ -363,6 +542,13 @@ class MazeV5(gym.Env):
                 )
 
     def _plot_maze(self, figsize: Tuple[int, int] = (5,5), save: bool|None = False) -> None:
+        """Plot maze map with matplolib. Allow to see all maze at once.
+
+        :param figsize: size of the plot, defaults to (5,5)
+        :type figsize: Tuple[int, int], optional
+        :param save: if True save plot as png image in working directory, defaults to False
+        :type save: bool | None, optional
+        """
         plt.figure(figsize=figsize)
 
         for state in self.states.values():
