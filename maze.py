@@ -12,20 +12,22 @@ class StateV3():
     :type coords: np.ndarray
     :param valid_actions: List of avaliable and valid actions in numerical form. Used only during maze creation
     :type valid_actions: List[int]
+    :param max_neighbours: Maximum amount of neighbours state could possible have.
+    :type max_neighbours: int
     :param state_type: Type of the state as string, defaults to "normal"
     :type state_type: str, optional
     :ivar neighbours: Dictionary, where keys are directions in numerical form 
         and values are references to :class:`Statev3` object
     :vartype neighbours: dict
     """
-    def __init__(self, coords: np.ndarray, valid_actions:List[int], state_type: str="normal"):
+    def __init__(self, coords: np.ndarray, valid_actions:List[int], max_neighbours:int,state_type: str="normal"):
         """Constructor method
         """
         self._coords = coords
         self.type = state_type
         self.reward = 0
         self.valid_actions = valid_actions
-        self.neighbours = dict(zip(valid_actions, [None]*len(valid_actions)))
+        self.neighbours = dict(zip(np.arange(max_neighbours), [None]*max_neighbours))
 
 
     @property
@@ -151,7 +153,7 @@ class MazeBuilderV4():
         :rtype: Type[StateV3]
         """
         actions = self._find_valid_action(coords)
-        return StateV3(coords, actions)
+        return StateV3(coords, actions, len(self.shape)*2)
     
     def _if_state_exist(self, coords:Tuple[int,int]) -> bool:
         """Check if state already exists in maze
